@@ -1,49 +1,49 @@
-# QQ-Minecraft Cross-Platform Bot
+# QQ-我的世界 跨平台机器人
 
-A multifunctional bot based on **Napcat QQ Bot Framework** and **Mineflayer Minecraft Bot Framework**. Supports AI chat (with image recognition), QQ-Minecraft cross-platform messaging, message recall logging, random cat pictures, likes, system info, and more.
+一个基于 **Napcat QQ 机器人框架** 和 **Mineflayer Minecraft 机器人框架** 的多功能机器人。支持 AI 聊天（含图像识别）、QQ-我的世界跨平台消息互通、消息撤回记录、随机猫图、点赞、系统信息等功能。
 
 ---
 
+### 功能特性
 
-### Features
+- **AI 聊天**（QQ群聊/私聊）  
+  支持文本和图像输入，通过 LM Studio（兼容 OpenAI API）调用本地大语言模型。支持工具调用，可获取时间、用户信息、上下文、执行 Minecraft 操作等。
 
-- **AI Chat** (QQ group/private chat)  
-  Supports text and image input, powered by local LLM via LM Studio (OpenAI-compatible API). Tool calls for time, user info, context, Minecraft operations, etc.
+- **Minecraft 集成**  
+  - 自动连接任意 Minecraft Java 版服务器（支持离线模式）  
+  - 将 QQ 消息转发到游戏内聊天，反之亦然  
+  - 查询在线玩家列表（游戏内使用 `#cx`，QQ 内使用 `/查服`）  
+  - 通过 AI 工具调用执行命令（仅管理员）和发送消息  
 
-- **Minecraft Integration**  
-  - Auto-connect to any Minecraft Java server (offline mode supported)  
-  - Forward QQ messages to in-game chat, and vice versa  
-  - Query online player list (`#cx` in game or `/查服` in QQ)  
-  - Execute commands (admin only) and send messages via AI tool calls  
+- **消息撤回记录**  
+  - 以加密形式记录被撤回的消息（管理员可使用 `$解密#G群号-序号` 进行解密）  
+  - 最多存储 1000 条记录，超出后自动清空  
 
-- **Message Recall Logging**  
-  - Logs recalled messages in encrypted form (admin can decrypt with `$解密#G群号-序号`)  
-  - Stores up to 1000 records, auto-clear on limit  
+- **实用命令**（QQ 中使用前缀 `/`）  
+  - `/菜单` 或 `/help` – 显示命令菜单  
+  - `/查服` 或 `/cx` – 获取 Minecraft 在线玩家  
+  - `/随机柴郡` 或 `/cj` – 随机柴郡猫图片  
+  - `/点赞` 或 `/dz` – 给发送者点赞（10个赞，30秒冷却，每天一次）  
+  - `/系统信息` 或 `/sysinfo` – 显示系统及机器人状态  
+  - `/清空记录`（仅管理员）– 清空所有撤回记录  
 
-- **Useful Commands** (prefix `/` in QQ)  
-  - `/菜单` or `/help` – Show command menu  
-  - `/查服` or `/cx` – Get Minecraft online players  
-  - `/随机柴郡` or `/cj` – Random Cheshire cat image  
-  - `/点赞` or `/dz` – Like the sender (10 likes, 30s cooldown, once per day)  
-  - `/系统信息` or `/sysinfo` – Display system & bot status  
-  - `/清空记录` (admin only) – Clear all recall records  
+- **其他功能**  
+  - 自动回复提及/回复消息  
+  - 违禁词审查  
+  - 长消息拆分与转发消息支持  
+  - 对话上下文记忆  
+  - WebSocket 与 Minecraft 的健康检查及自动重连  
 
-- **Other Features**  
-  - Automatic reply to mentions/replies  
-  - Censorship of banned words  
-  - Long message splitting & forward message support  
-  - Context memory for conversations  
-  - Health check & auto-reconnect for WebSocket and Minecraft  
+### 前提条件
 
-### Prerequisites
+- Node.js（v16 或更高版本）
+- 本地或远程运行的 [Napcat](https://github.com/NapNeko/NapCatQQ)（或任何兼容 OneBot v11 的 QQ 机器人）
+- [LM Studio](https://lmstudio.ai/)（或任何兼容 OpenAI 的 LLM API）– 可选，但 AI 功能需要
+- Minecraft Java 版服务器（用于 MC 集成，可选）
 
-- Node.js (v16 or later)
-- [Napcat](https://github.com/NapNeko/NapCatQQ) (or any OneBot v11 compatible QQ bot) running locally or remotely
-- [LM Studio](https://lmstudio.ai/) (or any OpenAI-compatible LLM API) – optional but required for AI features
-- A Minecraft Java Edition server (for MC integration, optional)
-  
-### MUST
-``` NodeJS
+### 必须安装
+
+```NodeJS
 npm install axios
 
 npm install mineflayer
