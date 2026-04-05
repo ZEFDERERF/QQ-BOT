@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const mineflayer = require('mineflayer');
+const readline = require('readline');
 
 const CONFIG_FILE = 'config.json';
 const PROMPTS_FILE = 'prompts.json';
@@ -273,6 +274,10 @@ class MinecraftManager {
         this.lastError = reason;
         this.scheduleReconnect();
       });
+
+      this.mcBot.on('message', (message) => {
+        console.log(message.toAnsi());
+      });
     } catch (err) {
       this.bot.logError('创建机器人失败:', err);
       this.lastError = err.message;
@@ -390,6 +395,55 @@ class Bot {
     this.healthCheck().catch(error => this.logError('启动自检失败:', error));
 
     this.logInfo('机器人初始化完成');
+    this.initConsole();
+  }
+
+  sendToMinecraft(message) {
+    if (!this.minecraft || !this.minecraft.connected || !this.minecraft.mcBot) {
+      console.log('[控制台] Minecraft 机器人未连接，无法发送消息');
+      return false;
+    }
+    this.minecraft.mcBot.chat(message);
+    console.log(`[控制台] 已发送: ${message}`);
+    return true;
+  }
+
+  initConsole() {
+    if (!this.config.minecraft || !this.config.minecraft.enabled) {
+      this.logInfo('控制台交互未启动：Minecraft 功能未启用');
+      return;
+    }
+    const startReadline = () => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: '> '
+      });
+      rl.prompt();
+      rl.on('line', (line) => {
+        const msg = line.trim();
+        if (msg) this.sendToMinecraft(msg);
+        rl.prompt();
+      });
+      rl.on('close', () => console.log('[控制台] 交互界面已关闭'));
+      this.logInfo('控制台交互已启动，输入消息即可发送到游戏');
+    };
+    if (this.minecraft && this.minecraft.connected) {
+      startReadline();
+    } else {
+      const checkInterval = setInterval(() => {
+        if (this.minecraft && this.minecraft.connected) {
+          clearInterval(checkInterval);
+          startReadline();
+        }
+      }, 1000);
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!this.minecraft || !this.minecraft.connected) {
+          console.log('[控制台] 等待 Minecraft 连接超时，控制台交互未启动');
+        }
+      }, 30000);
+    }
   }
 
   logInfo(...args) {
