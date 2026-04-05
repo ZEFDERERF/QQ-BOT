@@ -42,6 +42,7 @@ A multifunctional bot based on **Napcat QQ Bot Framework** and **Mineflayer Mine
 - [LM Studio](https://lmstudio.ai/) (or any OpenAI-compatible LLM API) – optional but required for AI features
 - A Minecraft Java Edition server (for MC integration, optional)
 
-`npm install axios`
-`npm install mineflayer`
-`npm install ws`
+``` NodeJS
+npm install axios
+npm install mineflayer
+npm install ws
