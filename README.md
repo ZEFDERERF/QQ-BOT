@@ -1,1 +1,44 @@
---- # 🤖 多功能 QQ & Minecraft Bot # 🤖 多功能 QQ + Minecraft 机器人 一款基于 Napcat（QQ 机器人框架）和 Mineflayer（Minecraft 机器人）的强大多功能机器人，具有 AI 集成和跨平台通信能力。 :contentReference[oaicite:0]{index=0} 一个基于 Napcat QQ 机器人框架与 Mineflayer Minecraft 机器人框架的多功能 AI 机器人，支持跨平台消息交互与自动化功能。 :contentReference[oaicite:1]{index=1} --- ## ✨ 功能 | 功能概览 ### 💬 QQ Bot 功能 - AI 对话（支持上下） - 群聊 / 私聊消息处理 - @机器人 / 回复触发 AI - 图片识别（支持消息发送图片给 AI） - 回回监控（可记录/解密） - 点赞功能（每日限制） - 系统信息查询 - 指令菜单系统 ### 🎮 Minecraft 功能 - 自动登录服务器 - 游戏内 AI 聊天（@ai 触发） - QQ ↔ MC 消息互通 - 在线玩家查询（#cx / /cx） - 执行 Minecraft 指令（管理员权限） ### 🧠 AI 功能 - 支持本地模型（LM Studio） - 工具调用系统（Function Calling） - 上下文记忆 - 请求限流与存储系统 ### 🔐 黑名单系统 - 违禁词过滤 - 消息监控 - 自动重连（QQ / MC） - 请求流程控制--- ##
+# QQ-Minecraft Cross-Platform Bot
+
+A multifunctional bot based on **Napcat QQ Bot Framework** and **Mineflayer Minecraft Bot Framework**. Supports AI chat (with image recognition), QQ-Minecraft cross-platform messaging, message recall logging, random cat pictures, likes, system info, and more.
+
+---
+
+## English
+
+### Features
+
+- **AI Chat** (QQ group/private chat)  
+  Supports text and image input, powered by local LLM via LM Studio (OpenAI-compatible API). Tool calls for time, user info, context, Minecraft operations, etc.
+
+- **Minecraft Integration**  
+  - Auto-connect to any Minecraft Java server (offline mode supported)  
+  - Forward QQ messages to in-game chat, and vice versa  
+  - Query online player list (`#cx` in game or `/查服` in QQ)  
+  - Execute commands (admin only) and send messages via AI tool calls  
+
+- **Message Recall Logging**  
+  - Logs recalled messages in encrypted form (admin can decrypt with `$解密#G群号-序号`)  
+  - Stores up to 1000 records, auto-clear on limit  
+
+- **Useful Commands** (prefix `/` in QQ)  
+  - `/菜单` or `/help` – Show command menu  
+  - `/查服` or `/cx` – Get Minecraft online players  
+  - `/随机柴郡` or `/cj` – Random Cheshire cat image  
+  - `/点赞` or `/dz` – Like the sender (10 likes, 30s cooldown, once per day)  
+  - `/系统信息` or `/sysinfo` – Display system & bot status  
+  - `/清空记录` (admin only) – Clear all recall records  
+
+- **Other Features**  
+  - Automatic reply to mentions/replies  
+  - Censorship of banned words  
+  - Long message splitting & forward message support  
+  - Context memory for conversations  
+  - Health check & auto-reconnect for WebSocket and Minecraft  
+
+### Prerequisites
+
+- Node.js (v16 or later)
+- [Napcat](https://github.com/NapNeko/NapCatQQ) (or any OneBot v11 compatible QQ bot) running locally or remotely
+- [LM Studio](https://lmstudio.ai/) (or any OpenAI-compatible LLM API) – optional but required for AI features
+- A Minecraft Java Edition server (for MC integration, optional)
