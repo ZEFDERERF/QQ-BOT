@@ -4,7 +4,6 @@ A multifunctional bot based on **Napcat QQ Bot Framework** and **Mineflayer Mine
 
 ---
 
-## English
 
 ### Features
 
