@@ -1,6 +1,6 @@
 ## 🌐 语言 / Language
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README_EN_US.md) | [简体中文](README.md)
 
 # QQ-Minecraft Cross-platform Bot
 
