@@ -1,3 +1,7 @@
+## 🌐 语言 / Language
+
+[English](README_EN_US.md) | [简体中文](README.zh-CN.md)
+
 # QQ-我的世界 跨平台机器人
 
 一个基于 **Napcat QQ 机器人框架** 和 **Mineflayer Minecraft 机器人框架** 的多功能机器人。支持 AI 聊天（含图像识别）、QQ-我的世界跨平台消息互通、消息撤回记录、随机猫图、点赞、系统信息等功能。
