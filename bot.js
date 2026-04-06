@@ -69,12 +69,12 @@ const defaultConfig = {
 
 /**
 If you are not a BC server, then please delete this configuration item (autoServer: 'BCSERVER') and the related code: 
-Around line 135, find the once('spawn') event handler, and delete or comment out the this.config.autoServer related code! 
+Around line 135, find the ” once('spawn') “ event handler code, and delete or comment out the this.config.autoServer related code! 
 Of course, you can also choose to modify this function into other code, and the loginCommand configuration item is similar!
 
 如果你不是BC服务器，
 那么请删除此配置项(autoServer: 'BCSERVER')和相关代码：
-大约135行左右找到 once('spawn') 事件处理，
+大约135行左右找到 ” once('spawn') “ 事件处理代码，
 删除或注释掉this.config.autoServer相关代码即可！
 当然你可以选择将此功能修改为别的代码，
 loginCommand配置项同理！
