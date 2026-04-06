@@ -1,3 +1,7 @@
+## 🌐 语言 / Language
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 # QQ-Minecraft Cross-platform Bot
 
 A multi‑function bot based on the **Napcat QQ Bot Framework** and the **Mineflayer Minecraft Bot Framework**. It supports AI chat (including image recognition), cross‑platform messaging between QQ and Minecraft, message recall logging, random cat pictures, likes, system info, and more.
