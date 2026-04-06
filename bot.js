@@ -58,7 +58,8 @@ const defaultConfig = {
     version: 'Minecraft Version',
     auth: 'offline',
     loginCommand: 'Message or command',
-    autoServer: 'BCSERVER'
+    autoServer: 'BCSERVER',
+    autoTpaccept: true
   },
   recallEnabled: true,
   recallEncrypt: false,
@@ -117,6 +118,7 @@ class MinecraftManager {
     this.lastError = null;
     this.stopped = false;
     this.messageProcessed = new Map();
+    this._lastTeleportTime = 0;
   }
 
   init() {
@@ -178,6 +180,23 @@ class MinecraftManager {
           const msg = typeof jsonMsg === 'string' ? JSON.parse(jsonMsg) : jsonMsg;
           const fullMessage = extractText(msg).trim();
           if (!fullMessage) return;
+
+          if (this.config.autoTpaccept) {
+          const teleportRequestPattern = /(.+) 请求传送到你的位置|(.+) 请求你传送到他的位置/i;
+          const match = fullMessage.match(teleportRequestPattern);
+          if (match) {
+            const now = Date.now();
+            if (!this._lastTeleportTime || now - this._lastTeleportTime > 3000) {
+              this._lastTeleportTime = now;
+              const requester = match[1] || match[2];
+                if (requester) {
+                  this.mcBot.chat('/tpaccept');
+                  this.bot.logInfo(`[自动传送] 已接受 ${requester} 的传送请求`);
+                }
+              }
+              return;
+            }
+          }
 
           let playerName = null;
           if (msg.extra && msg.extra.length > 0) {
@@ -355,32 +374,6 @@ class MinecraftManager {
       this.bot.logError('获取玩家列表失败', err);
       return { success: false, message: '[!] 获取玩家列表时发生错误' };
     }
-  }
-
-  autoTpaccept() {
-    let lastTeleportTime = 0;
-    const teleportRequestPattern = /(.+) 请求传送到你的位置|(.+) 请求你传送到他的位置/i;
-
-    this.mcBot.on('message', (jsonMsg) => {
-      try {
-        const msg = typeof jsonMsg === 'string' ? JSON.parse(jsonMsg) : jsonMsg;
-        const fullMessage = extractText(msg).trim();
-        const match = fullMessage.match(teleportRequestPattern);
-        if (match) {
-            const now = Date.now();
-            if (now - lastTeleportTime < 3000) return;
-            lastTeleportTime = now;
-
-            const requester = match[1] || match[2];
-            if (requester) {
-                this.mcBot.chat('/tpaccept');
-                this.bot.logInfo(`[自动传送] 已接受 ${requester} 的传送请求`);
-            }
-        }
-    } catch (err) {
-      return;
-    }
-  });
   }
 
 }
