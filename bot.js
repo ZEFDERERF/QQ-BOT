@@ -57,7 +57,8 @@ const defaultConfig = {
     username: 'Bot Name',
     version: 'Minecraft Version',
     auth: 'offline',
-    loginCommand: 'Message or command'
+    loginCommand: 'Message or command',
+    autoServer: 'BCSERVER'
   },
   recallEnabled: true,
   recallEncrypt: false,
@@ -136,6 +137,14 @@ class MinecraftManager {
         this.reconnectAttempts = 0;
         this.bot.logInfo('Minecraft 机器人已进入服务器');
         if (this.config.loginCommand) this.mcBot.chat(this.config.loginCommand);
+        if (this.config.autoServer && this.config.autoServer.trim()) {
+          setTimeout(() => {
+          if (this.mcBot && this.connected) {
+          this.mcBot.chat(`/server ${this.config.autoServer}`);
+          this.bot.logInfo(`自动切换服务器至 ${this.config.autoServer}`);
+        }
+      }, 2000);
+    }
         setTimeout(() => {
           if (this.mcBot && this.connected) {
             this.mcBot.setControlState('jump', true);
@@ -334,6 +343,33 @@ class MinecraftManager {
       return { success: false, message: '[!] 获取玩家列表时发生错误' };
     }
   }
+
+  autoTpaccept() {
+    let lastTeleportTime = 0;
+    const teleportRequestPattern = /(.+) 请求传送到你的位置|(.+) 请求你传送到他的位置/i;
+
+    this.mcBot.on('message', (jsonMsg) => {
+      try {
+        const msg = typeof jsonMsg === 'string' ? JSON.parse(jsonMsg) : jsonMsg;
+        const fullMessage = extractText(msg).trim();
+        const match = fullMessage.match(teleportRequestPattern);
+        if (match) {
+            const now = Date.now();
+            if (now - lastTeleportTime < 3000) return;
+            lastTeleportTime = now;
+
+            const requester = match[1] || match[2];
+            if (requester) {
+                this.mcBot.chat('/tpaccept');
+                this.bot.logInfo(`[自动传送] 已接受 ${requester} 的传送请求`);
+            }
+        }
+    } catch (err) {
+      return;
+    }
+  });
+  }
+
 }
 
 class Bot {
