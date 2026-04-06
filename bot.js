@@ -67,6 +67,22 @@ const defaultConfig = {
   randomCommands: ['/菜单', '/查服', '/随机柴郡', '/点赞', '/系统信息']
 };
 
+/**
+If you are not a BC server, 
+then please delete this configuration item and the related code: Around line 135, 
+find the once('spawn') event handler, 
+and delete or comment out the code related to this.config.autoServer!
+Of course, you can choose to modify this feature to other code, 
+and the loginCommand configuration item is the same!
+
+如果你不是BC服务器，
+那么请删除此配置项和相关代码：
+大约135行左右找到 once('spawn') 事件处理，
+删除或注释掉this.config.autoServer相关代码即可！
+当然你可以选择将此功能修改为别的代码，
+loginCommand配置项同理！
+*/
+
 const defaultPrompts = {
   system: "你是一名强大的AI助理，你需要用简短高效的语言回答用户的问题，你必须使用中文回答用户，除非用户让你使用其他语言"
 };
