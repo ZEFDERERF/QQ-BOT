@@ -53,3 +53,5 @@ npm install axios
 npm install mineflayer
 
 npm install ws
+
+npm install canvas
