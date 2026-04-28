@@ -8,11 +8,14 @@ const path = require('path');
 const WebSocket = require('ws');
 const mineflayer = require('mineflayer');
 const readline = require('readline');
+const yaml = require('js-yaml');
+const { createCanvas, loadImage } = require('canvas');
 
 const CONFIG_FILE = 'config.json';
 const PROMPTS_FILE = 'prompts.json';
 const BANNED_WORDS_FILE = 'banned_words.json';
 const RECALL_STORAGE_FILE = '撤回记录.json';
+const ASCII_FILE = 'ACSII.yml';
 const CACHE_TTL = 5 * 60 * 1000;
 const MAX_CACHE_SIZE = 100;
 const MAX_MESSAGE_CACHE = 2000;
@@ -95,11 +98,12 @@ if (!fs.existsSync(PROMPTS_FILE)) {
   console.log('已创建默认提示词文件 prompts.json，您可以根据需要修改系统提示词。');
 }
 
-let botConfig, prompts;
+let botConfig, prompts, asciiArt;
 try {
   botConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
   prompts = JSON.parse(fs.readFileSync(PROMPTS_FILE, 'utf8'));
-  console.log('成功加载配置文件 config.json 和 prompts.json');
+  asciiArt = yaml.load(fs.readFileSync(ASCII_FILE, 'utf8'));
+  console.log('成功加载配置文件 config.json、prompts.json 和 ACSII.yml');
 } catch (error) {
   console.error('读取配置文件失败:', error.message);
   process.exit(1);
@@ -154,12 +158,12 @@ class MinecraftManager {
         if (this.config.loginCommand) this.mcBot.chat(this.config.loginCommand);
         if (this.config.autoServer && this.config.autoServer.trim()) {
           setTimeout(() => {
-          if (this.mcBot && this.connected) {
-          this.mcBot.chat(`/server ${this.config.autoServer}`);
-          this.bot.logInfo(`自动切换服务器至 ${this.config.autoServer}`);
+            if (this.mcBot && this.connected) {
+              this.mcBot.chat(`/server ${this.config.autoServer}`);
+              this.bot.logInfo(`自动切换服务器至 ${this.config.autoServer}`);
+            }
+          }, 2000);
         }
-      }, 2000);
-    }
         setTimeout(() => {
           if (this.mcBot && this.connected) {
             this.mcBot.setControlState('jump', true);
@@ -182,13 +186,13 @@ class MinecraftManager {
           if (!fullMessage) return;
 
           if (this.config.autoTpaccept) {
-          const teleportRequestPattern = /(.+) 请求传送到你的位置|(.+) 请求你传送到他的位置/i;
-          const match = fullMessage.match(teleportRequestPattern);
-          if (match) {
-            const now = Date.now();
-            if (!this._lastTeleportTime || now - this._lastTeleportTime > 3000) {
-              this._lastTeleportTime = now;
-              const requester = match[1] || match[2];
+            const teleportRequestPattern = /(.+) 请求传送到你的位置|(.+) 请求你传送到他的位置/i;
+            const match = fullMessage.match(teleportRequestPattern);
+            if (match) {
+              const now = Date.now();
+              if (!this._lastTeleportTime || now - this._lastTeleportTime > 3000) {
+                this._lastTeleportTime = now;
+                const requester = match[1] || match[2];
                 if (requester) {
                   this.mcBot.chat('/tpaccept');
                   this.bot.logInfo(`[自动传送] 已接受 ${requester} 的传送请求`);
@@ -368,7 +372,6 @@ class MinecraftManager {
     try {
       const players = Object.values(this.mcBot.players);
       const onlinePlayers = players.map(p => p.username).filter(name => name !== this.mcBot.username);
-      console.log(`[Minecraft] 在线玩家: ${JSON.stringify(onlinePlayers)}`);
       return { success: true, count: onlinePlayers.length, list: onlinePlayers };
     } catch (err) {
       this.bot.logError('获取玩家列表失败', err);
@@ -384,6 +387,9 @@ class Bot {
     this.prompts = prompts;
     this.debugLog = config.debugLog === true;
     this.qqEnabled = config.qqEnabled === true;
+    this.configPath = CONFIG_FILE;
+    this.promptsPath = PROMPTS_FILE;
+    this.bannedWordsPath = BANNED_WORDS_FILE;
 
     this.cache = new Map();
     this.cacheTTL = new Map();
@@ -398,7 +404,6 @@ class Bot {
       const accessToken = config.apiEndpoints?.accessToken;
       const wsUrl = config.apiEndpoints.ws;
       const wsOptions = accessToken ? { headers: { 'Authorization': 'Bearer ' + accessToken } } : {};
-      this.ws = new WebSocket(wsUrl, wsOptions);
       this.wsUrl = wsUrl;
       this.wsOptions = wsOptions;
       this.initWebSocket();
@@ -434,10 +439,89 @@ class Bot {
       this.minecraft.init();
     }
 
-    this.healthCheck().catch(error => this.logError('启动自检失败:', error));
+    const initComplete = (healthCheckResult) => {
+      if (healthCheckResult && healthCheckResult.status === 'pass') {
+        console.log('\x1b[32m');
+        console.log('########################################################');
+        console.log('');
+        console.log(asciiArt.pass);
+        console.log('');
+        console.log('########################################################');
+        console.log('\x1b[0m');
+        this.logInfo('机器人初始化完成');
+      } else if (healthCheckResult && healthCheckResult.status === 'warn') {
+        console.log('\x1b[33m');
+        console.log('########################################################');
+        console.log('');
+        console.log(asciiArt.warn);
+        console.log('');
+        console.log('########################################################');
+        console.log('\x1b[0m');
+        this.logWarn(`自检时出现至少 ${healthCheckResult.errors} 个非致命错误`);
+        if (healthCheckResult.errorDetails) {
+          healthCheckResult.errorDetails.forEach((err, index) => {
+            this.logWarn(`  警告 ${index + 1}: [${err.type}] ${err.message}`);
+          });
+        }
+      } else {
+        console.log('\x1b[31m');
+        console.log('########################################################');
+        console.log('');
+        console.log(asciiArt.error);
+        console.log('');
+        console.log('########################################################');
+        console.log('\x1b[0m');
+        this.logError('机器人初始化失败');
+        if (healthCheckResult && healthCheckResult.errorDetails) {
+          healthCheckResult.errorDetails.forEach((err, index) => {
+            this.logError(`  错误 ${index + 1}: [${err.type}] ${err.message}`);
+          });
+        }
+        process.exit(1);
+      }
+      
+      this.initConsole();
 
-    this.logInfo('机器人初始化完成');
-    this.initConsole();
+      const { createWebPanel } = require('./web-panel');
+      this.webPanel = createWebPanel(this, { port: 3000 });
+    };
+
+    if (this.qqEnabled) {
+      let wsTimeout;
+      let checkInterval;
+      let attemptCount = 0;
+      const maxAttempts = 20;
+      
+      const checkWsStatus = () => {
+        attemptCount++;
+        const isWebSocketConnected = this.ws && this.ws.readyState === 1;
+        if (isWebSocketConnected) {
+          clearTimeout(wsTimeout);
+          clearInterval(checkInterval);
+          this.healthCheck().then(initComplete).catch(error => {
+            this.logError('启动自检失败:', error);
+            initComplete(false);
+          });
+        } else if (attemptCount >= maxAttempts) {
+          clearInterval(checkInterval);
+          this.logError('WebSocket 连接超时');
+          initComplete(false);
+        }
+      };
+      checkWsStatus();
+      checkInterval = setInterval(checkWsStatus, 250);
+
+      wsTimeout = setTimeout(() => {
+        clearInterval(checkInterval);
+        this.logError('WebSocket 连接超时');
+        initComplete(false);
+      }, 15000);
+    } else {
+      this.healthCheck().then(initComplete).catch(error => {
+        this.logError('启动自检失败:', error);
+        initComplete(false);
+      });
+    }
   }
 
   sendToMinecraft(message) {
@@ -488,41 +572,174 @@ class Bot {
     }
   }
 
-  logInfo(...args) {
+  _cleanupWebSocket() {
+    if (this.ws) {
+      try {
+        if (typeof this.ws.removeAllListeners === 'function') {
+          this.ws.removeAllListeners();
+        }
+        if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+          this.ws.close();
+        }
+      } catch (e) {
+        this.logError('清理 WebSocket 时出错', e);
+      }
+      this.ws = null;
+    }
+    this._wsReconnectAttempts = 0;
+  }
+
+  _writeLog(level, message, webSilent = false) {
     const timestamp = new Date().toISOString();
-    const plainMessage = `[${timestamp}] INFO: ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' ')}`;
-    console.log(plainMessage);
+    const plainMessage = `[${timestamp}] ${level}: ${message}`;
+
+    if (level === 'ERROR') {
+      console.error(plainMessage);
+    } else {
+      console.log(plainMessage);
+    }
     fs.appendFile('./Debug-Crash.log', plainMessage + '\n', (err) => {
       if (err) console.error('写入日志文件失败:', err);
     });
+
+    if (!webSilent && this._broadcastLog) {
+      this._broadcastLog(level.toLowerCase(), plainMessage);
+    }
   }
 
-  logError(message, error = '') {
-    const timestamp = new Date().toISOString();
-    const plainMessage = `[${timestamp}] ERROR: ${message}: ${error instanceof Error ? `${error.message}\n${error.stack}` : error}`;
-    console.error(plainMessage);
-    fs.appendFile('./Debug-Crash.log', plainMessage + '\n', (err) => {
-      if (err) console.error('写入错误日志文件时发生错误:', err);
-    });
+  logInfo(message, webSilent = false) {
+    this._writeLog('INFO', message, webSilent);
   }
 
-  logWarn(...args) {
-    const timestamp = new Date().toISOString();
-    const plainMessage = `[${timestamp}] WARN: ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg).join(' ')}`;
-    console.warn(plainMessage);
-    fs.appendFile('./Debug-Crash.log', plainMessage + '\n', (err) => {
-      if (err) console.error('写入日志文件失败:', err);
-    });
+  logError(message, error = '', webSilent = false) {
+    const errText = error instanceof Error ? `${error.message}\n${error.stack}` : error;
+    const fullMsg = `${message} ${errText}`;
+    this._writeLog('ERROR', fullMsg, webSilent);
   }
 
-  logDebug(...args) {
-    if (!this.debugLog) return;
-    const timestamp = new Date().toISOString();
-    const plainMessage = `[${timestamp}] DEBUG: ${args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : a).join(' ')}`;
-    console.log(plainMessage);
-    fs.appendFile('./Debug-Crash.log', plainMessage + '\n', (err) => {
-      if (err) console.error('写入调试日志文件时发生错误:', err);
-    });
+  logWarn(message, webSilent = false) {
+    this._writeLog('WARN', message, webSilent);
+  }
+
+  logDebug(message, webSilent = false) {
+    if (!this.debugLog) {
+      if (!webSilent && this._broadcastLog) {
+        const timestamp = new Date().toISOString();
+        const plainMessage = `[${timestamp}] DEBUG: ${message}`;
+        this._broadcastLog('debug', plainMessage);
+      }
+      return;
+    }
+    this._writeLog('DEBUG', message, webSilent);
+  }
+
+  reloadConfig() {
+    try {
+      const newConfig = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+      const oldQQEnabled = this.qqEnabled;
+      const oldMcEnabled = this.config.minecraft?.enabled;
+      const oldMcConfig = this.config.minecraft || {};
+
+      this.config = newConfig;
+      this.qqEnabled = newConfig.qqEnabled === true;
+      this.debugLog = newConfig.debugLog === true;
+      this.allowedGroups = new Set(newConfig.allowedGroups || []);
+      this.blacklist = new Set(newConfig.blacklistedUsers || []);
+      this.adminQQ = newConfig.adminQQ || '';
+
+      if (this.minecraft) {
+        this.minecraft.config = newConfig.minecraft;
+      }
+if (this.qqEnabled !== oldQQEnabled) {
+  if (this.qqEnabled) {
+    this.logInfo('QQ 功能已启用，正在初始化 WebSocket 连接...');
+    this._cleanupWebSocket();
+    const accessToken = this.config.apiEndpoints?.accessToken;
+    const wsUrl = this.config.apiEndpoints.ws;
+    const wsOptions = accessToken ? { headers: { 'Authorization': 'Bearer ' + accessToken } } : {};
+    this.wsUrl = wsUrl;
+    this.wsOptions = wsOptions;
+    this.initWebSocket();
+  } else {
+    this.logInfo('QQ 功能已禁用，正在关闭 WebSocket 连接...');
+    this._cleanupWebSocket();
+    this.ws = { send: () => this.logDebug('QQ 未启用，消息未发送') };
+  }
+}
+if (this.qqEnabled && oldQQEnabled) {
+  const newWsUrl = this.config.apiEndpoints.ws;
+  const newToken = this.config.apiEndpoints.accessToken;
+  if (newWsUrl !== this.wsUrl || newToken !== this.config.apiEndpoints?.accessToken) {
+    this.logInfo('WebSocket 配置已更改，重新连接...');
+    this._cleanupWebSocket();
+    const wsOptions = newToken ? { headers: { 'Authorization': 'Bearer ' + newToken } } : {};
+    this.wsUrl = newWsUrl;
+    this.wsOptions = wsOptions;
+    this.initWebSocket();
+  }
+}
+
+       const newMcEnabled = newConfig.minecraft?.enabled;
+      const newMcConfig = newConfig.minecraft || {};
+
+      const mcConnectionChanged = 
+        oldMcConfig.host !== newMcConfig.host ||
+        oldMcConfig.port !== newMcConfig.port ||
+        oldMcConfig.username !== newMcConfig.username;
+
+      if (newMcEnabled) {
+        if (!oldMcEnabled) {
+          this.logInfo('Minecraft 功能已启用，正在初始化连接...');
+          if (this.minecraft) {
+            this.minecraft.stopped = true;
+            if (this.minecraft.mcBot) this.minecraft.mcBot.end('配置重载');
+          }
+          this.minecraft = new MinecraftManager(this, newMcConfig);
+          this.minecraft.init();
+        } else if (mcConnectionChanged) {
+          this.logInfo('Minecraft 连接参数已更改，重新连接...');
+          if (this.minecraft) {
+            this.minecraft.stopped = true;
+            if (this.minecraft.mcBot) this.minecraft.mcBot.end('配置更新');
+          }
+          this.minecraft = new MinecraftManager(this, newMcConfig);
+          this.minecraft.init();
+        } else {
+          if (this.minecraft) this.minecraft.config = newMcConfig;
+        }
+      } else {
+        if (oldMcEnabled) {
+          this.logInfo('Minecraft 功能已禁用，正在断开连接...');
+          if (this.minecraft) {
+            this.minecraft.stopped = true;
+            if (this.minecraft.mcBot) this.minecraft.mcBot.end('配置禁用');
+            this.minecraft.connected = false;
+          }
+        }
+      }
+
+      this.logInfo('配置已重载并应用');
+    } catch (err) {
+      this.logError('重载配置失败', err);
+    }
+  }
+
+  reloadPrompts() {
+    try {
+      this.prompts = JSON.parse(fs.readFileSync(this.promptsPath, 'utf8'));
+      this.logInfo('提示词已重载');
+    } catch (err) {
+      this.logError('重载提示词失败', err);
+    }
+  }
+
+  reloadBannedWords() {
+    try {
+      this.bannedWords = JSON.parse(fs.readFileSync(this.bannedWordsPath, 'utf8'));
+      this.logInfo(`违禁词列表已重载，共 ${this.bannedWords.length} 条`);
+    } catch (err) {
+      this.logError('重载违禁词失败', err);
+    }
   }
 
   startCacheCleanup() {
@@ -587,11 +804,25 @@ class Bot {
   }
 
   initWebSocket() {
-    if (!this.qqEnabled) return;
-    this.ws.on('open', () => {
-      this.logInfo('WebSocket连接成功');
-      this.ws.send(JSON.stringify({ action: 'get_login_info', echo: 'login_info' }));
-    });
+  if (!this.qqEnabled) return;
+
+  if (this.ws) {
+    try {
+      this.ws.removeAllListeners();
+      if (this.ws.readyState === WebSocket.OPEN) this.ws.close();
+    } catch (e) {
+      this.logDebug('关闭旧的 WebSocket 连接时出错:', e.message);
+    }
+  }
+
+  this.ws = new WebSocket(this.wsUrl, this.wsOptions);
+  if (!this._wsReconnectAttempts) this._wsReconnectAttempts = 0;
+
+  this.ws.on('open', () => {
+    this._wsReconnectAttempts = 0;
+    this.logInfo('WebSocket连接成功');
+    this.ws.send(JSON.stringify({ action: 'get_login_info', echo: 'login_info' }));
+  });
 
     this.ws.on('message', (data) => {
       try {
@@ -625,21 +856,43 @@ class Bot {
       }
     });
 
-    this.ws.on('error', (error) => this.logError('WebSocket错误:', error));
+  this.ws.on('error', (error) => {
+    this.logError('WebSocket错误:', error);
+  });
 
-    let reconnectAttempts = 0;
-    this.ws.on('close', () => {
-      this.logInfo(`WebSocket连接关闭，尝试重连...`);
-      const delay = Math.min(MAX_WEB_RECONNECT_DELAY, WEB_RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts));
-      reconnectAttempts++;
-      setTimeout(() => {
-        this.logInfo('开始重新连接WebSocket...');
-        this.ws = new WebSocket(this.wsUrl, this.wsOptions);
-        this.initWebSocket();
-      }, delay);
-    });
-  }
+  this.ws.on('close', () => {
+    if (!this.qqEnabled) {
+      this.logInfo('QQ功能已禁用，不再重连WebSocket');
+      return;
+    }
 
+    if (this._wsReconnectAttempts >= 3) {
+      this.logInfo('WebSocket 重连次数已达上限，不再尝试重连');
+      return;
+    }
+
+    this.logInfo(`WebSocket连接关闭，尝试重连...`);
+    const delay = Math.min(
+      MAX_WEB_RECONNECT_DELAY,
+      WEB_RECONNECT_BASE_DELAY * Math.pow(2, this._wsReconnectAttempts)
+    );
+    this._wsReconnectAttempts++;
+
+    setTimeout(() => {
+      if (!this.qqEnabled) {
+        this.logInfo('QQ功能已禁用，取消重连');
+        this.logInfo('')
+        return;
+      }
+      if (this._wsReconnectAttempts >= 3) {
+        this.logInfo('WebSocket 重连次数已达上限，不再尝试重连');
+        return;
+      }
+      this.logInfo('开始重新连接WebSocket...');
+      this.initWebSocket();
+    }, delay);
+  });
+}
   cacheGroupMessage(message) {
     this.messageCache.set(message.message_id, {
       content: message.raw_message,
@@ -712,6 +965,46 @@ class Bot {
     });
   }
 
+  async getJoinedGroups() {
+    return new Promise((resolve) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        resolve([]);
+        return;
+      }
+
+      const echo = Date.now() + '_group_list_' + Math.random();
+      const payload = {
+        action: 'get_group_list',
+        echo
+      };
+      this.ws.send(JSON.stringify(payload));
+
+      const handler = (data) => {
+        try {
+          const resp = JSON.parse(data.toString());
+          if (resp.echo === echo) {
+            this.ws.off('message', handler);
+            if (resp.status === 'ok' && Array.isArray(resp.data)) {
+              resolve(resp.data.map(g => ({
+                id: g.group_id,
+                name: g.group_name
+              })));
+            } else {
+              resolve([]);
+            }
+          }
+        } catch (err) {
+          resolve([]);
+        }
+      };
+      this.ws.on('message', handler);
+      setTimeout(() => {
+        this.ws.off('message', handler);
+        resolve([]);
+      }, 5000);
+    });
+  }
+
   async handleGroupMessage(message) {
     try {
       this.logDebug('原始群消息对象:', {
@@ -732,7 +1025,7 @@ class Bot {
       const sender = message.sender;
       const senderName = sender.card || sender.nickname || '未知用户';
       const senderQQ = sender.user_id;
-      this.logInfo(`[群聊] 收到群[${groupId}]消息 ${message.message_id} [用户${senderQQ}] ${senderName} 发送了: ${message.raw_message}`);
+      this.logInfo(`[群聊] 收到群[${groupId}]消息ID:${message.message_id} [用户${senderQQ}] ${senderName} 发送了: ${message.raw_message}`);
 
       if (this.blacklist.has(senderQQ)) {
         this.logDebug(`用户 ${senderQQ} 在黑名单中，忽略消息`);
@@ -968,6 +1261,14 @@ class Bot {
     };
     if (cmdMap[text]) return cmdMap[text]();
 
+    const mchelpPattern = /^\/mchelp\s*(\d+)?/;
+    const mchelpMatch = text.match(mchelpPattern);
+    if (mchelpMatch) {
+      const pageNum = mchelpMatch[1] ? parseInt(mchelpMatch[1]) : 1;
+      this.handleMCHelp(originalMessage, pageNum, isPrivate);
+      return true;
+    }
+
     const decryptPattern = /^\$解密\s*#G(\d+)-(\d+)/;
     const decryptMatch = text.match(decryptPattern);
     if (decryptMatch) {
@@ -999,7 +1300,9 @@ class Bot {
         const ver = execSync('wmic os get Caption,Version /value').toString();
         const match = ver.match(/Caption=(.+)\r?\nVersion=(.+)/);
         if (match) osVersion = `${match[1].trim()} (${match[2].trim()})`;
-      } catch (e) {}
+      } catch (e) {
+        this.logDebug('获取 Windows 版本信息时出错:', e.message);
+      }
     }
 
     const loadAvg = os.loadavg();
@@ -1049,7 +1352,7 @@ class Bot {
     this.replyMessage(id, info, originalMessage.sender.user_id, originalMessage.message_id, 0, false, true, 0, 0, isPrivate);
   }
 
-  handlePlayerList(originalMessage, isPrivate) {
+  async handlePlayerList(originalMessage, isPrivate) {
     const id = isPrivate ? originalMessage.user_id : originalMessage.group_id;
     if (!this.minecraft) {
       this.replyMessage(id, '[i]功能未配置，无法使用', originalMessage.sender.user_id, originalMessage.message_id, 0, false, true, 0, 0, isPrivate);
@@ -1061,12 +1364,29 @@ class Bot {
       return;
     }
     const playerListStr = result.list.length ? result.list.join(', ') : '暂无';
-    this.replyMessage(id, `[i] 当前在线玩家: ${playerListStr}\n在线人数: ${result.count} 人`, originalMessage.sender.user_id, originalMessage.message_id, 0, false, true, 0, 0, isPrivate);
+    
+    if (this.minecraft.config.playerListImageMode) {
+      const imageBuffer = await this.createPlayerListImage(result.list, result.count);
+      const base64Image = `base64://${imageBuffer.toString('base64')}`;
+      const imageMsg = `[CQ:image,file=${base64Image}]`;
+      if (isPrivate) {
+        this.ws.send(JSON.stringify({ action: 'send_private_msg', params: { user_id: id, message: imageMsg } }));
+      } else {
+        this.ws.send(JSON.stringify({ action: 'send_group_msg', params: { group_id: id, message: imageMsg } }));
+      }
+    } else {
+      this.replyMessage(id, `[i] 当前在线玩家: ${playerListStr}\n在线人数: ${result.count} 人`, originalMessage.sender.user_id, originalMessage.message_id, 0, false, true, 0, 0, isPrivate);
+    }
   }
 
   async processQuestion(question, originalMessage, imageUrls = [], isPrivate) {
     if (question && (question.startsWith('/') || question.startsWith('$'))) {
       this.logDebug('processQuestion 检测到指令，已忽略');
+      return;
+    }
+    if (this.config.aiEnabled === false) {
+      const id = isPrivate ? originalMessage.user_id : originalMessage.group_id;
+      this.replyMessage(id, "AI功能已暂时关闭，请稍后再试~", originalMessage.sender.user_id, originalMessage.message_id, 0, false, false, 0, 0, isPrivate);
       return;
     }
 
@@ -1415,6 +1735,11 @@ class Bot {
 
   async askGameAI(question, username) {
     this.logInfo(`[游戏AI] 收到来自 ${username} 的消息: ${question}`);
+    if (this.config.aiEnabled === false) {
+      this.minecraft.mcBot.chat(`[AI] 功能已暂时关闭，请稍后再试`);
+      return;
+    }
+    
     const now = Date.now();
     if (this.lastGameChatTime && now - this.lastGameChatTime < 5000) {
       this.logDebug(`游戏内AI请求限流，${username}: ${question}`);
@@ -1782,12 +2107,337 @@ class Bot {
   • @机器人 /dz | /点赞 - 给自己点赞10次（全局冷却30秒，每日1次）
   • @机器人 /cj | /随机柴郡 - 发送一张随机的柴郡表情包
   • @机器人 /sysinfo | /系统信息 - 查看系统信息及机器人状态
+  • @机器人 /mchelp [页码] - 查看Minecraft服务器帮助菜单（如/mchelp 1）
 ${mcLine}
 系统设置
   • @机器人 /解密#G群号-序号 - 查看撤回消息（仅管理员）
   • @机器人 /清空记录 - 清空所有撤回记录（仅管理员）`;
     const id = isPrivate ? originalMessage.user_id : originalMessage.group_id;
     this.replyMessage(id, menuText, originalMessage.sender.user_id, originalMessage.message_id, 0, false, true, 0, 0, isPrivate);
+  }
+
+  async handleMCHelp(originalMessage, pageNum, isPrivate) {
+    const HELP_FILE = 'help.yml';
+    const id = isPrivate ? originalMessage.user_id : originalMessage.group_id;
+    const userId = originalMessage.sender.user_id;
+    const msgId = originalMessage.message_id;
+
+    try {
+      if (!fs.existsSync(HELP_FILE)) {
+        this.replyMessage(id, '[!] 帮助文件不存在', userId, msgId, 0, false, true, 0, 0, isPrivate);
+        return;
+      }
+
+      const helpContent = fs.readFileSync(HELP_FILE, 'utf8');
+      const helpData = yaml.load(helpContent);
+
+      if (!helpData || !helpData.pages) {
+        this.replyMessage(id, '[!] 帮助文件格式错误', userId, msgId, 0, false, true, 0, 0, isPrivate);
+        return;
+      }
+
+      const pages = helpData.pages;
+      const pageKey = String(pageNum);
+
+      if (!pages[pageKey]) {
+        const availablePages = Object.keys(pages).sort((a, b) => parseInt(a) - parseInt(b));
+        const maxPage = availablePages.length;
+        this.replyMessage(id, `[!] 页码 ${pageNum} 不存在，可用页码: ${availablePages.join(', ')}`, userId, msgId, 0, false, true, 0, 0, isPrivate);
+        return;
+      }
+
+      const pageContent = pages[pageKey];
+      const imageBuffer = await this.createHelpImage(pageContent);
+      const base64Image = `base64://${imageBuffer.toString('base64')}`;
+      
+      const message = isPrivate ? `[CQ:image,file=${base64Image}]` : `[CQ:at,qq=${userId}]\n[CQ:image,file=${base64Image}]`;
+      if (isPrivate) {
+        this.ws.send(JSON.stringify({ action: 'send_private_msg', params: { user_id: id, message } }));
+      } else {
+        this.ws.send(JSON.stringify({ action: 'send_group_msg', params: { group_id: id, message } }));
+      }
+      this.logInfo(`发送MC帮助图片成功，页码: ${pageNum}`);
+    } catch (error) {
+      this.logError('处理MC帮助指令失败', error);
+      this.replyMessage(id, '[!] 生成帮助图片失败', userId, msgId, 0, false, true, 0, 0, isPrivate);
+    }
+  }
+
+  _drawRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  async createGeneralImage(options) {
+    const {
+      title = '',
+      footerText = '',
+      lines = [],
+      titleColor = '#4f46e5',
+      watermarkText = null,
+      emptyText = '暂无内容'
+    } = options;
+
+    const lineHeight = 68;
+    const padding = 48;
+    const footerHeight = footerText ? 90 : 40;
+    const headerHeight = 100;
+    const width = 960;
+    const contentLines = lines.length > 0 ? lines : [emptyText];
+    const height = headerHeight + padding * 2 + contentLines.length * lineHeight + footerHeight;
+
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, width, height);
+
+    const cardX = 16, cardY = 12;
+    const cardW = width - 32, cardH = height - 24;
+    const radius = 16;
+
+    ctx.save();
+    this._drawRoundRect(ctx, cardX, cardY, cardW, cardH, radius);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.clip();
+
+    const headerGrad = ctx.createLinearGradient(0, 0, 0, headerHeight);
+    headerGrad.addColorStop(0, '#e2e2e2');
+    headerGrad.addColorStop(1, '#e2e2e2');
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(cardX, cardY, cardW, headerHeight);
+
+    if (title) {
+      const titleParts = this.parseMinecraftColor(title);
+
+      ctx.font = 'bold 32px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+      let totalWidth = 0;
+      for (const part of titleParts) {
+        totalWidth += ctx.measureText(part.text).width;
+      }
+
+      let titleX = (width - totalWidth) / 2;
+      ctx.textBaseline = 'middle';
+
+      for (const part of titleParts) {
+        ctx.fillStyle = part.color;
+        ctx.font = (part.bold ? 'bold ' : '') + '32px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+        const yTitle = cardY + headerHeight / 2;
+        ctx.textAlign = 'left';
+        ctx.fillText(part.text, titleX, yTitle);
+
+        if (part.underline) {
+          const metrics = ctx.measureText(part.text);
+          ctx.strokeStyle = part.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(titleX, yTitle + 16);
+          ctx.lineTo(titleX + metrics.width, yTitle + 16);
+          ctx.stroke();
+        }
+        titleX += ctx.measureText(part.text).width;
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cardX + 20, cardY + headerHeight);
+    ctx.lineTo(cardX + cardW - 20, cardY + headerHeight);
+    ctx.stroke();
+
+    const contentCount = contentLines.length;
+    const contentHeight = contentCount * lineHeight;
+    const availableHeight = height - headerHeight - footerHeight - cardY * 2;
+    const contentOffsetY = Math.max(0, (availableHeight - contentHeight) / 2);
+    
+    let y = cardY + headerHeight + contentOffsetY;
+    ctx.textAlign = 'left';
+    for (let i = 0; i < contentLines.length; i++) {
+      const line = contentLines[i];
+      const coloredParts = this.parseMinecraftColor(line);
+      let x = padding;
+
+      ctx.font = '28px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+      const fontMetrics = ctx.measureText('测试');
+      const ascent = fontMetrics.actualBoundingBoxAscent || 22;
+      const descent = fontMetrics.actualBoundingBoxDescent || 6;
+
+      if (i % 2 === 0) {
+        const bgRectX = padding - 16;
+        const bgRectY = y - ascent + -1;
+        const bgW = width - padding * 2 + 32;
+        const bgH = ascent + descent + 8;
+        const bgRadius = 14;
+        ctx.fillStyle = 'rgba(238, 242, 255, 0.7)';
+        this._drawRoundRect(ctx, bgRectX, bgRectY, bgW, bgH, bgRadius);
+        ctx.fill();
+      }
+
+      for (const part of coloredParts) {
+        ctx.fillStyle = part.color;
+        ctx.font = (part.bold ? 'bold ' : '') + '28px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+        const metrics = ctx.measureText(part.text);
+        ctx.fillText(part.text, x, y);
+
+        if (part.underline) {
+          ctx.strokeStyle = part.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, y + 5);
+          ctx.lineTo(x + metrics.width, y + 5);
+          ctx.stroke();
+        }
+        x += metrics.width;
+      }
+      y += lineHeight;
+    }
+
+    if (footerText) {
+      const footerY = height - footerHeight - cardY;
+      const footerGrad = ctx.createLinearGradient(0, footerY, 0, height);
+      footerGrad.addColorStop(0, '#e2e2e2');
+      footerGrad.addColorStop(1, '#e2e2e2');
+      ctx.fillStyle = footerGrad;
+      ctx.fillRect(cardX, footerY, cardW, height - footerY);
+
+      ctx.strokeStyle = '#d1d5db';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cardX + 40, footerY);
+      ctx.lineTo(cardX + cardW - 40, footerY);
+      ctx.stroke();
+
+      ctx.fillStyle = '#4b5563';
+      ctx.font = '18px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(footerText, width / 2, footerY + footerHeight / 2);
+    }
+
+    if (watermarkText) {
+      ctx.fillStyle = 'rgba(107, 114, 128, 0.15)';
+      ctx.font = '14px "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(watermarkText, width - padding, y + 8);
+    }
+
+    ctx.restore();
+    return canvas.toBuffer('image/png');
+  }
+
+  async createHelpImage(contentLines) {
+    const watermarkText = this.minecraft?.config?.watermark || '黄金海岸 Minecraft';
+    return this.createGeneralImage({
+      title: contentLines.length > 0 ? contentLines[0] : '',
+      footerText: '输入 /mchelp <页码> 即可翻页 | 示例: /mchelp 2',
+      lines: contentLines.slice(1),
+      watermarkText: watermarkText
+    });
+  }
+
+  async createPlayerListImage(players, playerCount) {
+    const watermarkText = this.minecraft?.config?.watermark || '黄金海岸 Minecraft';
+    const title = `&f在线玩家列表 &8| &e在线 ${playerCount} 人`;
+    const playerLines = players.length > 0 ? players.map(name => `&f${name}`) : [];
+    return this.createGeneralImage({
+      title: title,
+      footerText: null,
+      lines: playerLines,
+      watermarkText: watermarkText,
+      emptyText: '当前服务器暂无玩家在线'
+    });
+  }
+
+  parseMinecraftColor(text) {
+    const colorMap = {
+      '&0': '#1e293b',
+      '&1': '#1e40af',
+      '&2': '#166534',
+      '&3': '#0e7490',
+      '&4': '#b91c1c',
+      '&5': '#9333ea',
+      '&6': '#d97706',
+      '&7': '#64748b',
+      '&8': '#475569',
+      '&9': '#3b82f6',
+      '&a': '#22c55e',
+      '&b': '#06b6d4',
+      '&c': '#ef4444',
+      '&d': '#ec4899',
+      '&e': '#eab308',
+      '&f': '#1f2937',
+    };
+
+    const parts = [];
+    let currentColor = '#1f2937';
+    let currentBold = false;
+    let currentUnderline = false;
+    let currentText = '';
+
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '&' && i + 1 < text.length) {
+        const code = text[i] + text[i + 1];
+        if (colorMap[code]) {
+          if (currentText) {
+            parts.push({ text: currentText, color: currentColor, bold: currentBold, underline: currentUnderline });
+          }
+          currentColor = colorMap[code];
+          currentText = '';
+          i++;
+        } else if (code === '&r') {
+          if (currentText) {
+            parts.push({ text: currentText, color: currentColor, bold: currentBold, underline: currentUnderline });
+          }
+          currentColor = '#1f2937';
+          currentBold = false;
+          currentUnderline = false;
+          currentText = '';
+          i++;
+        } else if (code === '&l') {
+          if (currentText) {
+            parts.push({ text: currentText, color: currentColor, bold: currentBold, underline: currentUnderline });
+          }
+          currentBold = true;
+          currentText = '';
+          i++;
+        } else if (code === '&n') {
+          if (currentText) {
+            parts.push({ text: currentText, color: currentColor, bold: currentBold, underline: currentUnderline });
+          }
+          currentUnderline = true;
+          currentText = '';
+          i++;
+        } else if (code === '&m' || code === '&o' || code === '&k') {
+          i++;
+        } else {
+          currentText += text[i];
+        }
+      } else {
+        currentText += text[i];
+      }
+    }
+
+    if (currentText) {
+      parts.push({ text: currentText, color: currentColor, bold: currentBold, underline: currentUnderline });
+    }
+
+    return parts;
   }
 
   async handleMessageRecall(recallNotice) {
@@ -1964,14 +2614,94 @@ ${mcLine}
 
   async healthCheck() {
     const testQuestion = '请回复字母序列：' + Math.random().toString(36).substr(2, 6);
+    const fatalErrors = [];
+    const nonFatalErrors = [];
+
     try {
-      await this.callAI([{ role: 'user', content: testQuestion }]);
-      this.logInfo('API自检通过');
+      this.logDebug('正在检查配置文件...');
+      if (!this.config || typeof this.config !== 'object') {
+        fatalErrors.push({ type: 'config', message: '配置文件加载失败' });
+        this.logError('配置文件加载失败');
+      } else {
+        this.logInfo('配置文件检查通过');
+      }
+      if (this.qqEnabled) {
+        this.logDebug('正在检查 QQ WebSocket 连接...');
+        const isWebSocketConnected = this.ws && this.ws.readyState === 1;
+        if (!isWebSocketConnected) {
+          fatalErrors.push({ type: 'websocket', message: 'WebSocket 连接失败' });
+          this.logError('WebSocket 连接失败');
+        } else {
+          this.logInfo('QQ WebSocket 连接检查通过');
+        }
+      }
+
+      if (this.config.aiEnabled !== false) {
+        this.logDebug('正在检查 AI API...');
+        const aiResult = await this.callAI([{ role: 'user', content: testQuestion }]);
+        
+        if (aiResult.error) {
+          nonFatalErrors.push({ type: 'api', message: aiResult.error });
+          this.logWarn(`API自检失败: ${aiResult.error}`);
+        } else {
+          this.logInfo('API自检通过');
+        }
+      } else {
+        this.logInfo('AI功能已禁用，跳过API自检');
+      }
+
+      this.logDebug('正在检查必要目录...');
+      const requiredDirs = ['./logs', './data'];
+      for (const dir of requiredDirs) {
+        if (!fs.existsSync(dir)) {
+          try {
+            fs.mkdirSync(dir, { recursive: true });
+            this.logInfo(`创建必要目录: ${dir}`);
+          } catch (e) {
+            nonFatalErrors.push({ type: 'directory', message: `无法创建目录 ${dir}: ${e.message}` });
+            this.logWarn(`无法创建目录 ${dir}: ${e.message}`);
+          }
+        }
+      }
+      this.logInfo('必要目录检查通过');
+      this.logDebug('正在检查配置完整性...');
+      const requiredConfigFields = ['botQQ', 'adminQQ'];
+      for (const field of requiredConfigFields) {
+        if (!this.config[field]) {
+          nonFatalErrors.push({ type: 'config', message: `配置项 ${field} 未设置` });
+          this.logWarn(`配置项 ${field} 未设置`);
+        }
+      }
+      this.logInfo('配置完整性检查通过');
+      if (fatalErrors.length > 0) {
+        return { success: false, status: 'error', errors: fatalErrors.length, errorDetails: fatalErrors };
+      } else if (nonFatalErrors.length > 0) {
+        return { success: true, status: 'warn', errors: nonFatalErrors.length, errorDetails: nonFatalErrors };
+      } else {
+        return { success: true, status: 'pass', errors: 0 };
+      }
+
     } catch (error) {
-      this.logError('API自检失败:', error.message);
+      fatalErrors.push({ type: 'system', message: error.message });
+      this.logError(`系统自检异常: ${error.message}`);
+      return { success: false, status: 'error', errors: fatalErrors.length, errorDetails: fatalErrors };
     }
   }
 }
+process.on('uncaughtException', (error) => {
+  console.log('\x1b[31m');
+  console.log('########################################################');
+  console.log('');
+  console.log(asciiArt.fatal);
+  console.log('');
+  console.log('########################################################');
+  console.log('\x1b[0m');
+  console.error('未捕获的异常:', error);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('未处理的Promise拒绝:', reason);
+});
 
 console.log('正在启动机器人...');
 const bot = new Bot(botConfig, prompts);
