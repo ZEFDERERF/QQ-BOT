@@ -43,8 +43,6 @@
             --secondary-surface: var(--bg-secondary);
             --on-primary-color: white;
         }
-
-        /* ========= 深色模式变量 ========= */
         :root.dark {
             --bg-primary: #0b1120;
             --bg-secondary: #111827;
@@ -620,26 +618,19 @@
         transform: translate(-50%, -50%) scale(0.15);
         opacity: 0.9;
     }
-
-    /* 强冲击（一定要猛） */
     18% {
         transform: translate(-50%, -50%) scale(1.35);
         opacity: 0.7;
     }
-
-    /* 明显回缩 */
     32% {
         transform: translate(-50%, -50%) scale(0.85);
         opacity: 0.6;
     }
-
-    /* 第二次跳（必须看得出来） */
     48% {
         transform: translate(-50%, -50%) scale(1.15);
         opacity: 0.45;
     }
 
-    /* 拉开扩散 */
     70% {
         transform: translate(-50%, -50%) scale(1.45);
         opacity: 0.25;
@@ -669,7 +660,6 @@
 
     will-change: transform, opacity;
 
-    /* 更关键的是这里 */
     animation: heartbeatRipple 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
@@ -677,7 +667,6 @@
 .color-dot {
     position: relative;
 }
-        /* 主题上拉菜单样式 (修改为向上展开) */
         .theme-dropdown {
             position: relative;
             display: inline-block;
@@ -909,7 +898,7 @@
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <span style="min-width: 70px; color: var(--text-secondary);">版本</span>
-                                <span style="font-weight: 500; color: var(--text-primary);">1.2.0@ZEF-release | BOT 1.3.6@ZEF-release</span>
+                                <span style="font-weight: 500; color: var(--text-primary);">0.2.2@ZEF-snapshot | BOT 1.3.2@ZEF-release</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <span style="min-width: 70px; color: var(--text-secondary);">作者</span>
